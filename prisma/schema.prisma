@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id @default(cuid())
+  name        String
+  email       String       @unique
+  phone       String       @unique
+  password    String
+  isVerified  Boolean      @default(false)
+  otpCode     String?
+  otpExpiry   DateTime?
+  role        String       @default("STUDENT")
+  createdAt   DateTime     @default(now())
+  enrollments Enrollment[]
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  title       String
+  slug        String       @unique
+  description String
+  price       Float
+  isPublished Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  sections    Section[]
+  enrollments Enrollment[]
+}
+
+model Section {
+  id         String   @id @default(cuid())
+  title      String
+  orderIndex Int
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons    Lesson[]
+}
+
+model Lesson {
+  id         String  @id @default(cuid())
+  title      String
+  videoId    String
+  isPreview  Boolean @default(false)
+  orderIndex Int
+  sectionId  String
+  section    Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
