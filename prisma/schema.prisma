@@ -27,6 +27,8 @@ model Course {
   slug        String       @unique
   description String
   price       Float
+  category    String       @default("Geology")
+  subCategory String       @default("General")
   isPublished Boolean      @default(true)
   createdAt   DateTime     @default(now())
   sections    Section[]
@@ -43,13 +45,15 @@ model Section {
 }
 
 model Lesson {
-  id         String  @id @default(cuid())
-  title      String
-  videoId    String
-  isPreview  Boolean @default(false)
-  orderIndex Int
-  sectionId  String
-  section    Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  title       String
+  contentType String   @default("VIDEO")
+  videoId     String?
+  articleBody String?  @db.Text
+  isPreview   Boolean  @default(false)
+  orderIndex  Int
+  sectionId   String
+  section     Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 }
 
 model Enrollment {

@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PlayCircle, Lock, BookOpen, AlertCircle, CheckCircle2 } from "lucide-react";
+import { PlayCircle, Lock, BookOpen, FileText, CheckCircle2 } from "lucide-react";
 
 interface Lesson {
   id: string;
   title: string;
-  videoId: string;
+  contentType: string; // "VIDEO" or "ARTICLE"
+  videoId?: string | null;
+  articleBody?: string | null;
   isPreview: boolean;
   orderIndex: number;
 }
@@ -35,8 +37,8 @@ interface Student {
   phone: string;
 }
 
-// Helper 1: Extract YouTube 11-char ID
-function extractYouTubeId(input: string): string | null {
+function extractYouTubeId(input?: string | null): string | null {
+  if (!input) return null;
   const trimmed = input.trim();
   if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
   const regex =
@@ -45,11 +47,11 @@ function extractYouTubeId(input: string): string | null {
   return match ? match[1] : null;
 }
 
-// Helper 2: Extract Google Drive File ID from share links
-function extractGoogleDriveId(input: string): string | null {
-  const trimmed = input.trim();
-  const regex = /drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/;
-  const match = trimmed.match(regex);
+function extractGoogleDriveId(input?: string | null): string | null {
+  if (!input) return null;
+  const match = input
+    .trim()
+    .match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
 }
 
@@ -64,120 +66,42 @@ export default function CoursePlayer({
 }) {
   const allLessons = course.sections.flatMap((s) => s.lessons);
   const firstPreview = allLessons.find((l) => l.isPreview) || allLessons[0];
-
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(
     firstPreview || null
   );
 
-  // A lesson is unlocked if it's a 10% free preview OR if the student paid for the course
   const isLessonUnlocked = activeLesson
     ? activeLesson.isPreview || isEnrolled
     : false;
-
   const youtubeId = activeLesson ? extractYouTubeId(activeLesson.videoId) : null;
-  const googleDriveId = activeLesson
-    ? extractGoogleDriveId(activeLesson.videoId)
-    : null;
-  const isDirectVideo =
-    activeLesson?.videoId.endsWith(".mp4") ||
-    activeLesson?.videoId.endsWith(".webm");
+  const driveId = activeLesson ? extractGoogleDriveId(activeLesson.videoId) : null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Video Display Area */}
       <div className="lg:col-span-2 space-y-4">
-        <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-lg border border-slate-800 flex items-center justify-center">
-          {!activeLesson ? (
-            <p className="text-slate-400 text-sm">
-              No lectures found in this course.
-            </p>
-          ) : isLessonUnlocked ? (
-            <div className="w-full h-full relative">
-              {youtubeId ? (
-                /* 1. YouTube (Unlisted or Public) */
-                <iframe
-                  key={youtubeId}
-                  src={`https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1`}
-                  title={activeLesson.title}
-                  className="w-full h-full border-0"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
-              ) : googleDriveId ? (
-                /* 2. Google Drive Video Embed */
-                <iframe
-                  key={googleDriveId}
-                  src={`https://drive.google.com/file/d/${googleDriveId}/preview`}
-                  title={activeLesson.title}
-                  className="w-full h-full border-0"
-                  allow="autoplay; fullscreen"
-                  allowFullScreen
-                />
-              ) : isDirectVideo ? (
-                /* 3. Direct MP4 Video */
-                <video
-                  key={activeLesson.videoId}
-                  src={activeLesson.videoId}
-                  controls
-                  controlsList="nodownload"
-                  className="w-full h-full object-contain bg-black"
-                />
-              ) : (
-                /* 4. Fallback Demo Stream for Dummy Test IDs */
-                <div className="w-full h-full relative flex flex-col">
-                  <video
-                    key={activeLesson.id}
-                    src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-                    controls
-                    controlsList="nodownload"
-                    className="w-full h-full object-cover bg-black"
-                  />
-                  <div className="absolute bottom-14 left-3 right-3 bg-slate-900/90 backdrop-blur-sm border border-amber-500/40 text-amber-200 text-xs px-3 py-2 rounded-lg flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>
-                      Playing sample stream for placeholder ID{" "}
-                      <code className="bg-black/50 px-1.5 py-0.5 rounded text-white font-mono">
-                        {activeLesson.videoId}
-                      </code>
-                      . Paste an Unlisted YouTube link or Google Drive link in Admin Portal.
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Top Badge */}
-              <div className="absolute top-3 left-3 bg-emerald-600/90 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded shadow pointer-events-none">
-                {isEnrolled
-                  ? "Full Enrolled Access"
-                  : "Free Demo Lecture (10% Preview)"}
-              </div>
-
-              {/* Anti-Piracy Student Watermark */}
-              {student && (
-                <div className="absolute bottom-12 right-4 bg-black/40 text-white/60 text-[10px] font-mono px-2 py-0.5 rounded pointer-events-none select-none">
-                  {student.email} • {student.phone}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Locked Paid Lecture Screen */
-            <div className="p-8 text-center text-white max-w-md space-y-4">
+        {/* Content Viewer */}
+        {!activeLesson ? (
+          <div className="aspect-video bg-slate-950 rounded-2xl flex items-center justify-center text-slate-400 text-sm">
+            No lectures or articles found in this module.
+          </div>
+        ) : !isLessonUnlocked ? (
+          /* Locked Content Screen */
+          <div className="aspect-video bg-slate-950 rounded-2xl flex items-center justify-center p-8 text-center text-white">
+            <div className="max-w-md space-y-4">
               <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-amber-400">
                 <Lock className="w-6 h-6" />
               </div>
-              <div className="space-y-1">
-                <h3 className="text-xl font-bold">This Lecture is Locked</h3>
-                <p className="text-sm text-slate-400">
-                  Unlock all {allLessons.length} Geology lectures and study material by enrolling in this course.
+              <div>
+                <h3 className="text-xl font-bold">This Content is Locked</h3>
+                <p className="text-sm text-slate-400 mt-1">
+                  Enroll in this module to unlock all {allLessons.length} lectures and study notes.
                 </p>
               </div>
-
-              <div className="pt-2">
+              <div>
                 {!student ? (
                   <Link
                     href="/login"
-                    className="block w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition"
+                    className="block w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-6 rounded-xl transition"
                   >
                     Sign In / Register to Unlock (₹{course.price})
                   </Link>
@@ -185,41 +109,94 @@ export default function CoursePlayer({
                   <button
                     onClick={() =>
                       alert(
-                        `Logged in as ${student.name} (${student.phone}). Connecting Razorpay checkout for ₹${course.price}...`
+                        `Connecting Razorpay checkout for ₹${course.price}...`
                       )
                     }
-                    className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition"
+                    className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-6 rounded-xl transition"
                   >
-                    Pay ₹{course.price} to Unlock Full Course
+                    Pay ₹{course.price} to Unlock Full Module
                   </button>
                 )}
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Current Lesson Info */}
-        {activeLesson && (
-          <div className="bg-white p-5 rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                  Current Lesson
-                </span>
-                <h2 className="text-xl font-bold text-slate-900 mt-0.5">
-                  {activeLesson.title}
-                </h2>
-              </div>
-              {isLessonUnlocked ? (
-                <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-                  {isEnrolled ? "Unlocked" : "Free Preview"}
-                </span>
-              ) : (
-                <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
-                  Locked
+          </div>
+        ) : activeLesson.contentType === "ARTICLE" ? (
+          /* Unlocked Article Viewer */
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm space-y-4 min-h-[420px]">
+            <div className="flex items-center justify-between border-b pb-3">
+              <span className="text-xs font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded">
+                Written Study Notes
+              </span>
+              {student && (
+                <span className="text-xs text-slate-400 font-mono">
+                  {student.email}
                 </span>
               )}
             </div>
+            <div className="prose max-w-none text-slate-800 whitespace-pre-wrap leading-relaxed text-sm">
+              {activeLesson.articleBody}
+            </div>
+          </div>
+        ) : (
+          /* Unlocked Video Player */
+          <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-lg border border-slate-800">
+            {youtubeId ? (
+              <iframe
+                key={youtubeId}
+                src={`https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1`}
+                title={activeLesson.title}
+                className="w-full h-full border-0"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : driveId ? (
+              <iframe
+                key={driveId}
+                src={`https://drive.google.com/file/d/${driveId}/preview`}
+                title={activeLesson.title}
+                className="w-full h-full border-0"
+                allow="autoplay; fullscreen"
+                allowFullScreen
+              />
+            ) : (
+              <video
+                key={activeLesson.videoId || ""}
+                src={activeLesson.videoId || ""}
+                controls
+                className="w-full h-full object-contain"
+              />
+            )}
+            {student && (
+              <div className="absolute bottom-12 right-4 bg-black/40 text-white/60 text-[10px] font-mono px-2 py-0.5 rounded pointer-events-none select-none">
+                {student.email} • {student.phone}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Current Lesson/Article Metadata */}
+        {activeLesson && (
+          <div className="bg-white p-5 rounded-xl border border-slate-200 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                {activeLesson.contentType === "ARTICLE"
+                  ? "Selected Study Article"
+                  : "Selected Video Lecture"}
+              </span>
+              <h2 className="text-xl font-bold text-slate-900 mt-0.5">
+                {activeLesson.title}
+              </h2>
+            </div>
+            {isLessonUnlocked ? (
+              <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                {isEnrolled ? "Full Access" : "Free Preview"}
+              </span>
+            ) : (
+              <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
+                Locked
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -228,11 +205,11 @@ export default function CoursePlayer({
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5 h-fit">
         <div className="border-b border-slate-100 pb-3">
           <h3 className="font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-teal-700" /> Course Syllabus
+            <BookOpen className="w-4 h-4 text-teal-700" /> Syllabus Content
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            {allLessons.length} Lectures •{" "}
-            {allLessons.filter((l) => l.isPreview).length} Free Previews
+            {allLessons.length} Modules (
+            {allLessons.filter((l) => l.isPreview).length} Free Previews)
           </p>
         </div>
 
@@ -258,7 +235,13 @@ export default function CoursePlayer({
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
-                        {unlocked ? (
+                        {lesson.contentType === "ARTICLE" ? (
+                          <FileText
+                            className={`w-4 h-4 mt-0.5 shrink-0 ${
+                              isCurrent ? "text-teal-700" : "text-slate-500"
+                            }`}
+                          />
+                        ) : unlocked ? (
                           <PlayCircle
                             className={`w-4 h-4 mt-0.5 shrink-0 ${
                               isCurrent ? "text-teal-700" : "text-emerald-600"
